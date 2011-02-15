@@ -59,7 +59,6 @@ class SnakesHandler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
         except IOError:
             self.send_response(500)
-            self.send_header("Content-type", "text/plain")
             self.end_headers()
             
 
