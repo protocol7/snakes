@@ -16,9 +16,6 @@ DFAULT_R = 3
 
 class SnakesHandler(http.server.BaseHTTPRequestHandler):
             
-    def key_to_filename(self, key):
-        return hashlib.md5(key.encode("UTF-8")).hexdigest()
-    
     def do_GET(self):
         """Respond to a GET request."""
         print("Received GET request")
@@ -31,38 +28,48 @@ class SnakesHandler(http.server.BaseHTTPRequestHandler):
                 r = int(qs["r"][0])
         
         key = url.path[1:]
+        if not self.valid_key(key):
+            self.send_response(403)
+            self.end_headers()
+            return
         
-        if len(key) > 0:
-            print("Getting value for key: {}".format(key))
-            file_name = self.key_to_filename(key)
+        print("Getting value for key: {}".format(key))
+    
+        data_file = self.server.keys_dir + "/" + key
         
-            data_file = self.server.keys_dir + "/" + file_name
-            
+        value = None
+        modified_time = datetime.datetime.min
+        if os.path.exists(data_file):
             modified_time_stamp = os.stat(data_file).st_mtime
             modified_time = datetime.datetime.fromtimestamp(modified_time_stamp)
             last_modified_header = self.date_time_string(modified_time_stamp)
-            
+        
             value_length = os.stat(data_file).st_size
             with open(data_file, mode='rb') as the_file:
                 value = the_file.read(value_length)
+        
+        for i in range(min(r - 1, len(self.server.slaves))):
+            slave = self.server.slaves[i]
+            (headers, content) = slave.get(key)
+            
+            if not value == content:
+                last_modified = datetime.datetime.strptime(headers["last-modified"], "%a, %d %b %Y %H:%M:%S %Z")
+                if last_modified > modified_time:
+                    # newer value from other node, replace
+                    modified_time = last_modified
+                    value = content
+                    last_modified_header = headers["last-modified"]
 
-            for i in range(min(r - 1, len(self.server.slaves))):
-                slave = self.server.slaves[i]
-                (headers, content) = slave.get(key)
-                
-                if not value == content:
-                    last_modified = datetime.datetime.strptime(headers["last-modified"], "%a, %d %b %Y %H:%M:%S %Z")
-                    if last_modified > modified_time:
-                        # newer value from other node, replace
-                        modified_time = last_modified
-                        value = content
-                        last_modified_header = headers["last-modified"]
-
+        if not value == None:
             self.send_response(200)
             self.send_header("Content-type", "text/plain")
             self.send_header("Last-Modified", last_modified_header)
             self.end_headers()
             self.wfile.write(value)
+        else:
+            self.send_response(404)
+            self.end_headers()
+
 
         # TODO ignore?
         #        else:
@@ -74,23 +81,22 @@ class SnakesHandler(http.server.BaseHTTPRequestHandler):
         try:
             url = urllib.parse.urlparse(self.path)
             
-            key = url.path[1:]
+            key = url.path[1:]            
+            if not self.valid_key(key):
+                self.send_response(403)
+                self.end_headers()
+                return
+                
             print(key)
-            # TODO handle empty key
         
-            file_name = self.key_to_filename(key)
-            print(file_name)
-        
-            # TODO handle collisions
-
             # TODO handle missing content-length
             content_length = int(self.headers.get("Content-length"))
         
             # TODO stream
             data = self.rfile.read(content_length)
 
-            tmp_file = self.server.tmp_dir + "/" + file_name
-            data_file = self.server.keys_dir + "/" + file_name
+            tmp_file = self.server.tmp_dir + "/" + key
+            data_file = self.server.keys_dir + "/" + key
             
             # write to tmp directory so not to corrupt existing data on failure
             with open(tmp_file, mode='wb') as the_file:
@@ -118,6 +124,11 @@ class SnakesHandler(http.server.BaseHTTPRequestHandler):
         except IOError:
             self.send_response(500)
             self.end_headers()
+    
+    key_pattern = re.compile("^[a-zA-Z0-9]+$")
+    
+    def valid_key(self, key):
+        return self.key_pattern.match(key)
 
 class SnakesHttpServer(http.server.HTTPServer):
     
@@ -137,10 +148,14 @@ class SnakesHttpServer(http.server.HTTPServer):
 
 class SnakesNode:
     
-    http_client = httplib.Http()
+    http_client = httplib.Http(timeout=5)
     
     def __init__(self, node_url):
-        # TODO validate URL
+        # validate URL
+        parsed_url = urllib.parse.urlparse(node_url)
+        if not (parsed_url.scheme == "http" or parsed_url.scheme == "https") or len(parsed_url.netloc) == 0:
+            raise Exception("Node URLs must be absolute http or https URLs")
+        
         self.url = node_url
         
     def update(self, key, data):

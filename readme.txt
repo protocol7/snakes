@@ -1,15 +1,14 @@
 HTTP GET and PUT
-Single write master (limitation)
-No failover (limitation)
-HTTP for sync 
-String values only (limitation), could be json or whatever
+Master-less
+HTTP for sync
+Keys alphanumeric strings (limitation)
+Smallish string values only (limitation), could be json or whatever
 Stored in files with hashed keys, no buckets (limitation)
 No in-memory cache (limitation)
 No authentication (limitation)
 Logging
 No transactions (would use e-tags for optimistic locking)
-No configurable number of write slaves
-Small values
+No partitioning
 Locale
 
 Plan
