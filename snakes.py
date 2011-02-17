@@ -5,10 +5,14 @@ import hashlib
 import os
 import os.path
 import sys
-import httplib2
+import httplib
 import threading
 import string
 import re
+import datetime
+import urllib.parse
+
+DFAULT_R = 3
 
 class SnakesHandler(http.server.BaseHTTPRequestHandler):
             
@@ -17,28 +21,60 @@ class SnakesHandler(http.server.BaseHTTPRequestHandler):
     
     def do_GET(self):
         """Respond to a GET request."""
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-
-        key = self.path[1:]
+        print("Received GET request")
+        
+        r = DFAULT_R
+        url = urllib.parse.urlparse(self.path)
+        if len(url.query) > 0:
+            qs = urllib.parse.parse_qs(url.query)
+            if "r" in qs:
+                r = int(qs["r"][0])
+        
+        key = url.path[1:]
         
         if len(key) > 0:
             print("Getting value for key: {}".format(key))
             file_name = self.key_to_filename(key)
         
             data_file = self.server.keys_dir + "/" + file_name
-
+            
+            modified_time_stamp = os.stat(data_file).st_mtime
+            modified_time = datetime.datetime.fromtimestamp(modified_time_stamp)
+            last_modified_header = self.date_time_string(modified_time_stamp)
+            
+            value_length = os.stat(data_file).st_size
             with open(data_file, mode='rb') as the_file:
-                shutil.copyfileobj(the_file, self.wfile)
-        else:
-            # print last transaction ID
-            self.wfile.write(str(self.server.transaction_log.transaction_seq).encode("utf-8"))
+                value = the_file.read(value_length)
+
+            for i in range(min(r - 1, len(self.server.slaves))):
+                slave = self.server.slaves[i]
+                (headers, content) = slave.get(key)
+                
+                if not value == content:
+                    last_modified = datetime.datetime.strptime(headers["last-modified"], "%a, %d %b %Y %H:%M:%S %Z")
+                    if last_modified > modified_time:
+                        # newer value from other node, replace
+                        modified_time = last_modified
+                        value = content
+                        last_modified_header = headers["last-modified"]
+
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.send_header("Last-Modified", last_modified_header)
+            self.end_headers()
+            self.wfile.write(value)
+
+        # TODO ignore?
+        #        else:
+        # print last transaction ID
+        #            self.wfile.write(str(self.server.transaction_log.transaction_seq).encode("utf-8"))
             
     def do_PUT(self):
         """Respond to a PUT request."""
         try:
-            key = self.path[1:]
+            url = urllib.parse.urlparse(self.path)
+            
+            key = url.path[1:]
             print(key)
             # TODO handle empty key
         
@@ -64,15 +100,17 @@ class SnakesHandler(http.server.BaseHTTPRequestHandler):
             os.rename(tmp_file, data_file)
             
             # TODO clean up tmp if rename fails
-            self.server.transaction_log.writeTransaction(key)
+            
+            # Ignore transaction log for now
+            # self.server.transaction_log.writeTransaction(key)
             
             # push to slaves
             # TODO do async
-            for slave in self.server.slaves:
-                print("Pushing to slave {}".format(slave))
-                http_client = httplib2.Http()
-                http_client.request(slave + "/" + key, method="PUT", redirections=0,body=data, 
-                    headers={'content-type':'text/plain'})
+
+            qs = urllib.parse.parse_qs(url.query)
+            if not "push" in qs:
+                for slave in self.server.slaves:
+                    slave.update(key, data)
                 
             self.send_response(201)
             self.send_header("Content-type", "text/plain")
@@ -94,9 +132,31 @@ class SnakesHttpServer(http.server.HTTPServer):
         if not os.path.exists(self.keys_dir): os.mkdir(self.keys_dir)
         if not os.path.exists(self.tmp_dir): os.mkdir(self.tmp_dir)
         
-        self.transaction_log = TransactionLog(self.data_dir + "/transactions")
-    
+        # Ignore transaction log for now
+        # self.transaction_log = TransactionLog(self.data_dir + "/transactions")
 
+class SnakesNode:
+    
+    http_client = httplib.Http()
+    
+    def __init__(self, node_url):
+        # TODO validate URL
+        self.url = node_url
+        
+    def update(self, key, data):
+        print("Pushing to slave {}".format(self.url))
+
+        self.http_client.request(self.url + "/" + key + "?push=true", method="PUT", redirections=0,body=data, 
+            headers={'content-type':'text/plain'})
+
+    def get(self, key):
+        print("Getting from node {}".format(self.url))
+
+        (headers, content) = self.http_client.request(self.url + "/" + key + "?r=1", method="GET", redirections=0)
+        return (headers, content)
+
+
+# TODO remove?
 class TransactionLog:
     transaction_seq = 0
     
@@ -144,9 +204,13 @@ if __name__ == '__main__':
     parser = OptionParser()
     parser.add_option("-p", "--port", dest="port",help="local port to listen on", type="int", default=9000)
     parser.add_option("-d", "--data", dest="data_dir",help="data directory", type="string", default="data")
-    (options, slaves) = parser.parse_args()
+    (options, node_urls) = parser.parse_args()
     
-    httpd = SnakesHttpServer(("", options.port), SnakesHandler, slaves, options.data_dir)
+    nodes = []
+    for node_url in node_urls:
+        nodes.append(SnakesNode(node_url))
+        
+    httpd = SnakesHttpServer(("", options.port), SnakesHandler, nodes, options.data_dir)
     
     print("Server Starts - {}:{}".format("", options.port))
     try:

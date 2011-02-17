@@ -1,6 +1,3 @@
-data
-tmp
+data*
 value.txt
 .DS_Store
-data2
-tmp2
