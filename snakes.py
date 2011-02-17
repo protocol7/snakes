@@ -6,6 +6,9 @@ import os
 import os.path
 import sys
 import httplib2
+import threading
+import string
+import re
 
 class SnakesHandler(http.server.BaseHTTPRequestHandler):
             
@@ -19,15 +22,19 @@ class SnakesHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
 
         key = self.path[1:]
-        print(key)
-        file_name = self.key_to_filename(key)
-        print(file_name)
         
-        data_file = self.server.data_dir + "/" + file_name
+        if len(key) > 0:
+            print("Getting value for key: {}".format(key))
+            file_name = self.key_to_filename(key)
+        
+            data_file = self.server.keys_dir + "/" + file_name
 
-        with open(data_file, mode='rb') as the_file:
-            shutil.copyfileobj(the_file, self.wfile)
-
+            with open(data_file, mode='rb') as the_file:
+                shutil.copyfileobj(the_file, self.wfile)
+        else:
+            # print last transaction ID
+            self.wfile.write(str(self.server.transaction_log.transaction_seq).encode("utf-8"))
+            
     def do_PUT(self):
         """Respond to a PUT request."""
         try:
@@ -47,14 +54,17 @@ class SnakesHandler(http.server.BaseHTTPRequestHandler):
             data = self.rfile.read(content_length)
 
             tmp_file = self.server.tmp_dir + "/" + file_name
-            data_file = self.server.data_dir + "/" + file_name
+            data_file = self.server.keys_dir + "/" + file_name
             
-            # write to tmp directory so not so corrupt existing data on failure
+            # write to tmp directory so not to corrupt existing data on failure
             with open(tmp_file, mode='wb') as the_file:
                 the_file.write(data)
         
             # write succeded, move file
             os.rename(tmp_file, data_file)
+            
+            # TODO clean up tmp if rename fails
+            self.server.transaction_log.writeTransaction(key)
             
             # push to slaves
             # TODO do async
@@ -70,22 +80,73 @@ class SnakesHandler(http.server.BaseHTTPRequestHandler):
         except IOError:
             self.send_response(500)
             self.end_headers()
-            
+
+class SnakesHttpServer(http.server.HTTPServer):
+    
+    def __init__(self, server_address, RequestHandlerClass, slaves = [], data_dir = "data"):
+        super( SnakesHttpServer, self ).__init__(server_address, RequestHandlerClass)
+        self.slaves = slaves
+        self.data_dir = data_dir
+        self.keys_dir = data_dir + "/keys"
+        self.tmp_dir = data_dir + "/tmp"
+        
+        if not os.path.exists(self.data_dir): os.mkdir(self.data_dir)
+        if not os.path.exists(self.keys_dir): os.mkdir(self.keys_dir)
+        if not os.path.exists(self.tmp_dir): os.mkdir(self.tmp_dir)
+        
+        self.transaction_log = TransactionLog(self.data_dir + "/transactions")
+    
+
+class TransactionLog:
+    transaction_seq = 0
+    
+    write_lock = threading.Lock()
+    
+    def __init__(self, transaction_log_file):
+        # read the last transaction ID
+        if os.path.exists(transaction_log_file):
+            transaction_log_length = os.stat(transaction_log_file).st_size
+
+            if transaction_log_length > 0:
+                print("Reading last transaction ID from transaction log")
+                with open(transaction_log_file, mode="r", encoding='utf-8') as self.transaction_log:
+                    block_size = 100
+                    seek_pos = transaction_log_length - block_size
+                    if seek_pos < 0:
+                        seek_pos = 0
+                    self.transaction_log.seek(seek_pos)
+                    data = self.transaction_log.read(block_size).split('\n')
+
+                    match = re.match("(\d+),.+", data.pop())
+                    if match:
+                        self.transaction_seq = int(match.group(1)) + 1
+                        print("New transaction sequence: {}".format(self.transaction_seq))
+        
+            print("Appending to existing transaction log: {}".format(transaction_log_file))
+            self.transaction_log = open(transaction_log_file, mode="a", encoding='utf-8')
+        else:
+            print("Creating new transaction log: {}".format(transaction_log_file))
+            self.transaction_log = open(transaction_log_file, mode="w", encoding='utf-8')
+        
+    
+    def writeTransaction(self, key):
+        # make sure only one thread is writing at any given time
+        with self.write_lock:
+            print("writing to transaction log: {}".format(key))
+            self.transaction_log.write("\n{},{}".format(self.transaction_seq, key))
+            self.transaction_log.flush()
+            os.fsync(self.transaction_log.fileno())
+            self.transaction_seq = self.transaction_seq + 1
+    
+    
 
 if __name__ == '__main__':
     parser = OptionParser()
     parser.add_option("-p", "--port", dest="port",help="local port to listen on", type="int", default=9000)
     parser.add_option("-d", "--data", dest="data_dir",help="data directory", type="string", default="data")
-    parser.add_option("-t", "--tmp", dest="tmp_dir",help="tmp directory", type="string", default="tmp")
     (options, slaves) = parser.parse_args()
     
-    if not os.path.exists(options.data_dir): os.mkdir(options.data_dir)
-    if not os.path.exists(options.tmp_dir): os.mkdir(options.tmp_dir)
-    
-    httpd = http.server.HTTPServer(("", options.port), SnakesHandler)
-    httpd.slaves = slaves
-    httpd.data_dir = options.data_dir
-    httpd.tmp_dir = options.tmp_dir
+    httpd = SnakesHttpServer(("", options.port), SnakesHandler, slaves, options.data_dir)
     
     print("Server Starts - {}:{}".format("", options.port))
     try:
