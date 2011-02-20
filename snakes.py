@@ -1,7 +1,5 @@
 from optparse import OptionParser
 import http.server
-import shutil
-import hashlib
 import os
 import os.path
 import sys
