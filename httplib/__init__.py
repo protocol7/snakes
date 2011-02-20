@@ -848,7 +848,7 @@ the same interface as FileCache."""
             except socket.gaierror:
                 conn.close()
                 raise ServerNotFoundError("Unable to find the server at %s" % conn.host)
-            except (socket.error, httplib.HTTPException):
+            except (socket.error):
                 # Just because the server closed the connection doesn't apparently mean
                 # that the server didn't send a response.
                 pass
