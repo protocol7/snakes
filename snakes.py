@@ -182,7 +182,6 @@ class AsyncNodeUpdator(threading.Thread):
     
     def run(self):
         while(not self.stopped):
-            print("111")
             try:
                 (url, data) = self.queue.get(True, 1)
                 try:
