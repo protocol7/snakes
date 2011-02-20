@@ -182,8 +182,9 @@ class AsyncNodeUpdator(threading.Thread):
     
     def run(self):
         while(not self.stopped):
+            print("111")
             try:
-                (url, data) = self.queue.get(False, 1)
+                (url, data) = self.queue.get(True, 1)
                 try:
                     print("Pushing async to node {}".format(url))
                     self.http_client.request(url, method="PUT",body=data,headers={'content-type':'text/plain'})

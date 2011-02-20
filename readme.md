@@ -3,7 +3,7 @@ snakes is a very basic distributed key-value store written in Python. With snake
 * snakes communicates over HTTP, both with clients and among nodes. To interact as a client, you issue simple HTTP requests.
 * Keys must be alphanumeric strings
 * Values should be strings of limited size (snakes will hold and compare values in-memory). The contents of the values are opaque to snakes, it can be anything (e.g. JSON, XML)
-* snakes uses a very simple file storage. It uses one file per key. This keeps snakes simple but will not result in optimal performance as snakes will have to do a lot of seeks. SSD drives are recommended.
+* snakes uses a very simple file storage. It uses one file per key. This keeps snakes simple but will not result in optimal performance as snakes will have to do a lot of seeks. SSD drives are recommended if you for some strange reason wants to use snakes under load.
 * snakes does not currently support any authentication. However, snakes is meant to be placed behind a reverse proxy (such as Apache httpd or Nginx) where authentication could be performed.
 * snakes has very limited logging
 * snakes does not support any form of transactions. However, a future improvement might support optimistic locking with the use of HTTP e-tags.
