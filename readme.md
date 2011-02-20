@@ -1,4 +1,4 @@
-snakes is a very basic distributed key-value store. With snakes, you can run multiple nodes that are all able to act as read and write masters. Nodes will attempt to keep each other up-to-date. snakes is merely a prototype and therefore has many limitations. Below you will find a list of snakes basic features and limitations:
+snakes is a very basic distributed key-value store written in Python. With snakes, you can run multiple nodes that are all able to act as read and write masters. Nodes will attempt to keep each other up-to-date. snakes is merely a prototype and therefore has many limitations. Below you will find a list of snakes basic features and limitations:
 
 * snakes communicates over HTTP, both with clients and among nodes. To interact as a client, you issue simple HTTP requests.
 * Keys must be alphanumeric strings
