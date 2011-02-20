@@ -1,3 +1,4 @@
 data*
+*.pyc
 value.txt
 .DS_Store
