@@ -13,9 +13,9 @@ snakes is a very basic distributed key-value store. With snakes, you can run mul
 ## Starting snakes
 snakes is very simple to start. You can run as many nodes as you like. Each must have a unique IP address/port combination and a separate storage directory. To start three nodes on the same server, run:
 
-python3.1 snakes.py http://127.0.0.1:9001 http://127.0.0.1:9002
-python3.1 snakes.py -p 9001 -d data2 http://127.0.0.1:9000 http://127.0.0.1:9002
-python3.1 snakes.py -p 9002 -d data3 http://127.0.0.1:9000 http://127.0.0.1:9001
+    python3.1 snakes.py http://127.0.0.1:9001 http://127.0.0.1:9002
+    python3.1 snakes.py -p 9001 -d data2 http://127.0.0.1:9000 http://127.0.0.1:9002
+    python3.1 snakes.py -p 9002 -d data3 http://127.0.0.1:9000 http://127.0.0.1:9001
 
 snakes requires Python 3.1.
 
@@ -27,22 +27,23 @@ To communicate with snakes you use simple HTTP requests.
 ### Get a value
 To get the value of a key, issue an HTTP GET request. The examples below uses curl, but any HTTP client can be used:
 
-curl http://localhost:9002/key
+    curl http://localhost:9002/key
 
 This request will return the value as the content of the response. If the key is not known to the cluster, a 404 response code will be returned. 
 
 You can also configure how many nodes in the snakes cluster that should be ask to provide a value for the key. You do this using the r query string parameter. By default, r=3. Here's an example:
-curl http://localhost:9002/key?r=2
+
+    curl http://localhost:9002/key?r=2
 
 ### Store a value
 To store (create or update) a value for a key, issue an HTTP PUT request, for example:
 
-curl -X PUT -d "some value" http://localhost:9002/key
+    curl -X PUT -d "some value" http://localhost:9002/key
 
 On a successful update, a 201 response code will be returned.
 
 On updates, snakes will update all nodes in a cluster. Some of these will be done synchronously before returning a response to the client. The remaining will be done on a background thread pool. By default, 3 nodes gets updated synchronously. However, you can tell snakes if you want a different number of nodes updated synchronously by using the "w" query string parameter. For example:
 
-curl -X PUT -d "some value" http://localhost:9002/key?w=4
+    curl -X PUT -d "some value" http://localhost:9002/key?w=4
 
 That's all there is to it. Now go and play :-)
