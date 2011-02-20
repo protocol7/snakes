@@ -5,6 +5,9 @@ import json
 import sys
 
 class Sentence:
+    """ Represents a sentence within a poem. Sentences are delimited by punctation characters and themselves
+        only contains alphanumeric words and whitespaces
+        """
     
     def __init__(self, sentence):
         self.sentence = sentence
@@ -14,6 +17,8 @@ class Sentence:
         return sorted(tokens, key=lambda s: s.count(","))
 
     def as_tokens(self):
+        """ Returns all permutations of how the sentence can be split into unique combinations of words """
+        
         results = [self.__concat(self.words)]
         
         self.__split(self.words, results, "")
@@ -41,11 +46,13 @@ class Sentence:
         return " ".join(words)
         
 class Poem:
+    """ Representens a complete poem """
     
     def __init__(self, poem):
         self.poem = poem
         
     def as_tokens(self):
+        """ Returns the sentences of a poem, as strings """
         pattern = re.compile("[^\w\t ]+")
         
         tokens = pattern.split(self.poem)
@@ -56,6 +63,8 @@ class Poem:
         return tokens
         
     def as_sentences(self):
+        """ Returns the sentences of a poem and Sentence types """
+        
         tokens = self.as_tokens()
 
         sentences = []
@@ -71,7 +80,7 @@ class Spotify():
         self.http_client = http_client
     
     def search(self, track_name):  
-        """ Searches for a track with a specific name, return the Spotify link for the first track found"""
+        """ Searches for a track with a specific name, returns the Spotify link for the first track found"""
          
         # Limited to doing one attempt, since more attempt seldome returns better results
         (headers, content) = self.http_client.request("http://ws.spotify.com/search/1/track.json?q={}".format(track_name), method="GET")
@@ -84,6 +93,10 @@ class Spotify():
                 return track.get("href")
 
     def search_all(self, track_names):
+        """ Searches for tracks with the specified track names. Returns a list of tuples of the track name and track link
+            (if any match is found, None otherwise)
+          """
+        
         results = []
         for track_name in track_names:
             results.append((track_name, self.search(track_name)))
@@ -91,12 +104,15 @@ class Spotify():
         return results
 
 class SearchResult:
+    """ Represents a sentence and it's tokens and their matching Spotify tracks """
     
     def __init__(self, sentence, results):
         self.sentence = sentence
         self.results = results
         
     def coverage(self):
+        """ Returns the percentage (0.0-1.0) of words in the sentence that this search result covers. """
+        
         total_no_words = len(self.sentence.split())
         words_with_href = 0
         
@@ -110,6 +126,8 @@ class SearchResult:
         return words_with_href/total_no_words
         
     def format(self):
+        """ Formats a search result for human consumation """
+        
         rows = []
         for result in self.results:
             words, href = result
@@ -123,6 +141,8 @@ class SearchResult:
         return "\n".join(rows)
 
 class PoemSearch:
+    """ The main acting class. Performs a search on Spotify for matching track for a provided poem """
+    
     
     def __init__(self, spotify_client):
         self.spotify_client = spotify_client
