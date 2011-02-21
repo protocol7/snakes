@@ -46,4 +46,4 @@ On updates, snakes will update all nodes in a cluster. Some of these will be don
 
     curl -X PUT -d "some value" http://localhost:9000/foo?w=4
 
-That's all there is to it. Now go and play :-)
+That's all there is to it. Now, go play :-)
