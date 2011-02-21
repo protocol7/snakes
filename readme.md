@@ -25,25 +25,25 @@ snakes will default to running on port 9000 and use a data directory named "data
 To communicate with snakes you use simple HTTP requests. 
 
 ### Get a value
-To get the value of a key, issue an HTTP GET request. The examples below uses curl, but any HTTP client can be used:
+To get the value of a key, issue an HTTP GET request to the server with the key as the path. In the examples below, the key name is "foo". The examples below uses curl, but any HTTP client can be used:
 
-    curl http://localhost:9002/key
+    curl http://localhost:9000/foo
 
 This request will return the value as the content of the response. If the key is not known to the cluster, a 404 response code will be returned. 
 
 You can also configure how many nodes in the snakes cluster that should be ask to provide a value for the key. You do this using the r query string parameter. By default, r=3. Here's an example:
 
-    curl http://localhost:9002/key?r=2
+    curl http://localhost:9000/foo?r=2
 
 ### Store a value
 To store (create or update) a value for a key, issue an HTTP PUT request, for example:
 
-    curl -X PUT -d "some value" http://localhost:9002/key
+    curl -X PUT -d "some value" http://localhost:9000/foo
 
 On a successful update, a 201 response code will be returned.
 
 On updates, snakes will update all nodes in a cluster. Some of these will be done synchronously before returning a response to the client. The remaining will be done on a background thread pool. By default, 3 nodes gets updated synchronously. However, you can tell snakes if you want a different number of nodes updated synchronously by using the "w" query string parameter. For example:
 
-    curl -X PUT -d "some value" http://localhost:9002/key?w=4
+    curl -X PUT -d "some value" http://localhost:9000/foo?w=4
 
 That's all there is to it. Now go and play :-)
